@@ -47,21 +47,20 @@ void MTDeviceStart(MTDeviceRef, int); // thanks comex
 void MTDeviceStop(MTDeviceRef);
 
 
-NSDate *touchStartTime;
-float middleclickX, middleclickY;
-float middleclickX2, middleclickY2;
 MTDeviceRef dev;
 
-BOOL needToClick;
+NSDate *touchStartTime;
+
 BOOL maybeMiddleClick;
 BOOL pressed;
+
+float mouseDelta, mouseLastX, mouseLastY;
 
 @implementation Controller
 
 - (void) start
 {
 	pressed = NO;
-	needToClick = NO;
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];	
     [NSApplication sharedApplication];
 	
@@ -90,124 +89,78 @@ BOOL pressed;
 	[pool release];
 }
 
-- (BOOL)getClickMode
-{
-	return needToClick;
-}
 
-- (void)setMode:(BOOL)click
-{
-	needToClick = click;
-}
 
 int callback(int device, Finger *data, int nFingers, double timestamp, int frame) {
 	NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];	
 	
-	if(needToClick)
-	{
-		
-		if(nFingers == 3)
-		{
-			if(!pressed)
-			{
-				NSLog(@"Pressed");
-				#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-				  CGEventCreateKeyboardEvent(NULL, (CGKeyCode)55, true);
-				#else
-				  CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, true );
-				#endif
-				pressed = YES;
-			}
-			
-		}
-		
-		if(nFingers == 0) {
-			if(pressed)
-			{
-				NSLog(@"Released");
-				#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-					CGEventCreateKeyboardEvent(NULL, (CGKeyCode)55, false);
-				#else
-					CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, false );
-				#endif					
-				
-				pressed = NO;
-			}
-		}
-	}
-	else 
-	{
-		if (nFingers==0){
-			touchStartTime = NULL;
-			if(middleclickX+middleclickY) {
-				float delta = ABS(middleclickX-middleclickX2)+ABS(middleclickY-middleclickY2); 
-				if (delta < 0.4f) {
-					// Emulate a middle click
-					
-					// get the current pointer location
-					CGEventRef ourEvent = CGEventCreate(NULL);
-					CGPoint ourLoc = CGEventGetLocation(ourEvent);
-					
-					/*
-					 // CMD+Click code
-					 CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, true );
-					 CGPostMouseEvent( ourLoc, 1, 1, 1);
-					 CGPostMouseEvent( ourLoc, 1, 1, 0);
-					 CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, false );
-					 */
-					
-					// Real middle click
-					#if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-						CGEventPost (kCGHIDEventTap, CGEventCreateMouseEvent (NULL,kCGEventOtherMouseDown,ourLoc,kCGMouseButtonCenter));
-						CGEventPost (kCGHIDEventTap, CGEventCreateMouseEvent (NULL,kCGEventOtherMouseUp,ourLoc,kCGMouseButtonCenter));
-					#else
-						CGPostMouseEvent( ourLoc, 1, 3, 0, 0, 1);
-						CGPostMouseEvent( ourLoc, 1, 3, 0, 0, 0);
-					#endif
-					
-				}
-			}
-			
-		} else if (nFingers>0 && touchStartTime == NULL){		
-			NSDate *now = [[NSDate alloc] init];
-			touchStartTime = [now retain];
-			[now release];
-			
-			maybeMiddleClick = YES;
-			middleclickX = 0.0f;
-			middleclickY = 0.0f;
-		} else {
-			if (maybeMiddleClick==YES){
-				NSTimeInterval elapsedTime = -[touchStartTime timeIntervalSinceNow];  
-				if (elapsedTime > 0.5f)
-					maybeMiddleClick = NO;
-			}
-		}
-		
-		if (nFingers>3) {
-			maybeMiddleClick = NO;
-			middleclickX = 0.0f;
-			middleclickY = 0.0f;
-		}
-		
-		if (nFingers==3) {
-			Finger *f1 = &data[0];
-			Finger *f2 = &data[1];
-			Finger *f3 = &data[2];
-			
-			if (maybeMiddleClick==YES) {
-				middleclickX = (f1->normalized.pos.x+f2->normalized.pos.x+f3->normalized.pos.x);
-				middleclickY = (f1->normalized.pos.y+f2->normalized.pos.y+f3->normalized.pos.y);
-				middleclickX2 = middleclickX;
-				middleclickY2 = middleclickY;
-				maybeMiddleClick=NO;
-			} else {
-				middleclickX2 = (f1->normalized.pos.x+f2->normalized.pos.x+f3->normalized.pos.x);
-				middleclickY2 = (f1->normalized.pos.y+f2->normalized.pos.y+f3->normalized.pos.y);
-			}
-		}
-	}
-
+    if (nFingers==0){
+        
+        if(mouseDelta != 0. && mouseDelta < 0.07f && -[touchStartTime timeIntervalSinceNow] < 0.3) {
+            // Emulate a middle click
+            
+            // get the current pointer location
+            CGEventRef ourEvent = CGEventCreate(NULL);
+            CGPoint ourLoc = CGEventGetLocation(ourEvent);
+            
+            /*
+             // CMD+Click code
+             CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, true );
+             CGPostMouseEvent( ourLoc, 1, 1, 1);
+             CGPostMouseEvent( ourLoc, 1, 1, 0);
+             CGPostKeyboardEvent( (CGCharCode)0, (CGKeyCode)55, false );
+             */
+            
+            // Real middle click
+            #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+                CGEventPost (kCGHIDEventTap, CGEventCreateMouseEvent (NULL,kCGEventOtherMouseDown,ourLoc,kCGMouseButtonCenter));
+                CGEventPost (kCGHIDEventTap, CGEventCreateMouseEvent (NULL,kCGEventOtherMouseUp,ourLoc,kCGMouseButtonCenter));
+            #else
+                CGPostMouseEvent( ourLoc, 1, 3, 0, 0, 1);
+                CGPostMouseEvent( ourLoc, 1, 3, 0, 0, 0);
+            #endif
+        }
+        
+        touchStartTime = NULL;
+        
+    } else if (nFingers>0 && touchStartTime == NULL){		
+        NSDate *now = [[NSDate alloc] init];
+        touchStartTime = [now retain];
+        [now release];
+        
+        maybeMiddleClick = YES;
+        mouseDelta = 0;
+    } else {
+        if (maybeMiddleClick==YES){
+            NSTimeInterval elapsedTime = -[touchStartTime timeIntervalSinceNow];  
+            if (elapsedTime > 0.5f)
+                maybeMiddleClick = NO;
+        }
+    }
+    
+    if (nFingers>2) {
+        maybeMiddleClick = NO;
+        mouseDelta = 0;
+    }
+    
+    if (nFingers==2) {
+        Finger *f1 = &data[0];
+        Finger *f2 = &data[1];
+        
+        float curX = (f1->normalized.pos.x+f2->normalized.pos.x);
+        float curY = (f1->normalized.pos.y+f2->normalized.pos.y);
+        
+        if (maybeMiddleClick==YES) {
+            mouseLastX = curX;
+            mouseLastY = curY;
+            mouseDelta = 0;
+            maybeMiddleClick=NO;
+        } else {
+            mouseDelta += ABS(curX-mouseLastX)+ABS(curY-mouseLastY);
+            mouseLastX = curX;
+            mouseLastY = curY;
+        }
+    }
 	
 	[pool release];
 	return 0;

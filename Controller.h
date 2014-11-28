@@ -14,7 +14,5 @@
 }
 
 - (void) start;
-- (void)setMode:(BOOL)click;
-- (BOOL)getClickMode;
 
 @end
